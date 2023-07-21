@@ -2,7 +2,7 @@
 
 import numpy as np
 from dataclasses import dataclass, field
-from pprint import pp
+from math import sqrt
 
 # This is your team name
 CREATOR = "QStars"
@@ -26,10 +26,10 @@ class Vehicle:
         target = None
 
     def distance_to(self, x, y):
-        pass
-        # get own position
-
-        # calc distance to x, y
+        if self.obj is None:
+            return 99999
+        dist = sqrt((x - self.obj.x) ** 2 + (y - self.obj.y) ** 2)
+        return dist
 
     def kill(self):
         # remove from base
@@ -194,10 +194,65 @@ class PlayerAi:
                                     closest_vehicle = vehicle
                             if closest_vehicle is not None:
                                 closest_vehicle.target = [base.x, base.y]
-                                closest_vehicle.goto(base.x, base.y)
                     if "boats" in info[name]:
                         # boats are priority targets but only reachable by jets
-                        pass
+                        for boat in info[name]["boats"]:
+                            # find the closest vehicle to the base without a target and
+                            # set the target to the base
+                            closest_distance = 99999
+                            closest_vehicle = None
+
+                            for key in vehicles.keys():
+                                vehicle = vehicles[key]
+                                if not vehicle.type == "jet":
+                                    continue
+                                distance = vehicle.distance_to(base.x, base.y)
+                                if (
+                                    distance < closest_distance
+                                    and vehicle.target is None
+                                ):
+                                    closest_distance = distance
+                                    closest_vehicle = vehicle
+                            if closest_vehicle is not None:
+                                closest_vehicle.target = [boat.x, boat.y]
+
+                    if "tanks" in info[name]:
+                        for tank in info[name]["tanks"]:
+                            closest_distance = 99999
+                            closest_vehicle = None
+
+                            for key in vehicles.keys():
+                                vehicle = vehicles[key]
+                                if not vehicle.type == "tank":
+                                    continue
+                                distance = vehicle.distance_to(tank.x, tank.y)
+                                if (
+                                    distance < closest_distance
+                                    and vehicle.target is None
+                                ):
+                                    closest_distance = distance
+                                    closest_vehicle = vehicle
+                            if closest_vehicle is not None:
+                                closest_vehicle.target = [tank.x, tank.y]
+
+                    if "jets" in info[name]:
+                        for jet in info[name]["jets"]:
+                            closest_distance = 99999
+                            closest_vehicle = None
+
+                            for key in vehicles.keys():
+                                vehicle = vehicles[key]
+                                if not vehicle.type == "jet" or vehicle.type == "tank":
+                                    continue
+                                distance = vehicle.distance_to(jet.x, jet.y)
+                                if (
+                                    distance < closest_distance
+                                    and vehicle.target is None
+                                ):
+                                    closest_distance = distance
+                                    closest_vehicle = vehicle
+                            if closest_vehicle is not None:
+                                closest_vehicle.target = [jet.x, jet.y]
 
                     # if the target is a near a tank, direct the tanks at it
                     # if "jets" in info[name]:
@@ -217,6 +272,8 @@ class PlayerAi:
             for tank in myinfo["tanks"]:
                 if vehicles[tank.uid].target == None:
                     tank.set_heading((tank.heading + 45) % 360)
+                else:
+                    tank.goto(*vehicles[tank.uid].target)
 
         if "jets" in myinfo:
             for jet in myinfo["jets"]:
@@ -227,6 +284,8 @@ class PlayerAi:
                         j.distance_since_last_dir_longest = j.distance_since_last_dir
                         j.distance_since_last_dir = 0
                         jet.set_heading((jet.heading + 30) % 360)
+                else:
+                    jet.goto(*j.target)
 
         # Iterate through all my ships
         if "ships" in myinfo:
