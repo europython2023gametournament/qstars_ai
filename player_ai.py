@@ -23,7 +23,6 @@ class Vehicle:
 
     def update_current_obj(self, obj):
         self.obj = obj
-        target = None
 
     def distance_to(self, x, y):
         if self.obj is None:
