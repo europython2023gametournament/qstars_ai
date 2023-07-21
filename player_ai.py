@@ -14,13 +14,14 @@ class Vehicle:
     base_uid: str
 
     type: str = ""
+    target = None
 
     position = np.array([0, 0])
     distance_since_last_dir = 0
     distance_since_last_dir_longest = 0
 
     def update_current_obj(self, obj):
-        pass
+        target = None
 
     def distance_to(self, x, y):
         pass
@@ -40,13 +41,24 @@ class Base:
     ships: list[str] = field(default_factory=list)
     jets: list[str] = field(default_factory=list)
 
-    def build_tank(self, base):
+    def build_tank(self, base, seen_uids):
         if base.crystal > base.cost("tank"):
             # build_tank() returns the uid of the tank that was built
             tank_uid = base.build_tank(heading=0)
             self.tanks.append(tank_uid)
-            vehicles[tank_uid] = Vehicle(uid=tank_uid, base_uid=base.uid)
-            return tank_uid
+            vehicles[tank_uid] = Vehicle(uid=tank_uid, base_uid=base.uid, type="tank")
+            seen_uids.add(tank_uid)
+
+    def build_mine(self, base):
+        if base.crystal > base.cost("mine"):
+            base.build_mine()
+
+    def build_jet(self, base, seen_uids):
+        if base.crystal > base.cost("jet"):
+            jet_uid = base.build_jet(heading=360 * np.random.random())
+            self.jets.append(jet_uid)
+            vehicles[jet_uid] = Vehicle(uid=jet_uid, base_uid=base.uid, type="jet")
+            seen_uids.add(jet_uid)
 
     def build(self, base):
         """base build decision tree."""
@@ -55,16 +67,15 @@ class Base:
 
         # first make sure we build mines
         if base.mines < 2:
-            if base.crystal > base.cost("mine"):
-                base.build_mine()
+            self.build_mine(base)
         elif base.crystal > base.cost("tank") and len(self.tanks) < 1:
-            seen_uids.add(self.build_tank(base))
-        elif len(self.jets) < 2 and base.crystal > base.cost("jet"):
-            jet_uid = base.build_jet(heading=360 * np.random.random())
-            self.jets.append(jet_uid)
-
-            vehicles[jet_uid] = Vehicle(uid=jet_uid, base_uid=base.uid)
-            seen_uids.add(jet_uid)
+            # make sure we have at least one tank defending the base
+            self.build_tank(base, seen_uids)
+        elif base.mines < 3:
+            # increase the number of mines
+            self.build_mine(base)
+        elif len(self.jets) < 2:
+            self.build_jet(base, seen_uids)
 
         return seen_uids
 
