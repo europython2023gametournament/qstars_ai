@@ -254,16 +254,6 @@ class PlayerAi:
                             if closest_vehicle is not None:
                                 closest_vehicle.target = [jet.x, jet.y]
 
-                    # if the target is a near a tank, direct the tanks at it
-                    # if "jets" in info[name]:
-
-                    # pass
-                # Target only bases
-                # if "bases" in info[name]:
-                #     # Simply target the first base
-                #     t = info[name]["bases"][0]
-                #     target = [t.x, t.y]
-
         # loop over all vehicles that have no target and resume normal operations
 
         # Iterate through all my tanks
@@ -273,7 +263,9 @@ class PlayerAi:
                 if vehicles[tank.uid].target == None:
                     tank.set_heading((tank.heading + 45) % 360)
                 else:
-                    tank.goto(*vehicles[tank.uid].target)
+                    tank.goto(
+                        vehicles[tank.uid].target[0], vehicles[tank.uid].target[1]
+                    )
 
         if "jets" in myinfo:
             for jet in myinfo["jets"]:
@@ -285,7 +277,7 @@ class PlayerAi:
                         j.distance_since_last_dir = 0
                         jet.set_heading((jet.heading + 30) % 360)
                 else:
-                    jet.goto(*j.target)
+                    jet.goto(j.target[0], j.target[1])
 
         # Iterate through all my ships
         if "ships" in myinfo:
