@@ -14,6 +14,7 @@ class Vehicle:
     base_uid: str
 
     type: str = ""
+    obj = None
     target = None
 
     position = np.array([0, 0])
@@ -21,6 +22,7 @@ class Vehicle:
     distance_since_last_dir_longest = 0
 
     def update_current_obj(self, obj):
+        self.obj = obj
         target = None
 
     def distance_to(self, x, y):
@@ -28,6 +30,18 @@ class Vehicle:
         # get own position
 
         # calc distance to x, y
+
+    def kill(self):
+        # remove from base
+        if self.base_uid in bases:
+            if self.uid in bases[self.base_uid].tanks:
+                bases[self.base_uid].tanks.remove(self.uid)
+            if self.uid in bases[self.base_uid].jets:
+                bases[self.base_uid].jets.remove(self.uid)
+        else:
+            print("base not found")
+            exit()
+        del vehicles[self.uid]
 
 
 vehicles: dict[str, Vehicle] = {}
@@ -37,15 +51,15 @@ vehicles: dict[str, Vehicle] = {}
 class Base:
     uid: str
 
-    tanks: list[str] = field(default_factory=list)
-    ships: list[str] = field(default_factory=list)
-    jets: list[str] = field(default_factory=list)
+    tanks: set[str] = field(default_factory=set)
+    ships: set[str] = field(default_factory=set)
+    jets: set[str] = field(default_factory=set)
 
     def build_tank(self, base, seen_uids):
         if base.crystal > base.cost("tank"):
             # build_tank() returns the uid of the tank that was built
             tank_uid = base.build_tank(heading=0)
-            self.tanks.append(tank_uid)
+            self.tanks.add(tank_uid)
             vehicles[tank_uid] = Vehicle(uid=tank_uid, base_uid=base.uid, type="tank")
             seen_uids.add(tank_uid)
 
@@ -56,9 +70,16 @@ class Base:
     def build_jet(self, base, seen_uids):
         if base.crystal > base.cost("jet"):
             jet_uid = base.build_jet(heading=360 * np.random.random())
-            self.jets.append(jet_uid)
+            self.jets.add(jet_uid)
             vehicles[jet_uid] = Vehicle(uid=jet_uid, base_uid=base.uid, type="jet")
             seen_uids.add(jet_uid)
+
+    def build_ship(self, base, seen_uids):
+        if base.crystal > base.cost("ship"):
+            ship_uid = base.build_ship(heading=360 * np.random.random())
+            self.ships.add(ship_uid)
+            vehicles[ship_uid] = Vehicle(uid=ship_uid, base_uid=base.uid, type="ship")
+            seen_uids.add(ship_uid)
 
     def build(self, base):
         """base build decision tree."""
@@ -68,7 +89,7 @@ class Base:
         # first make sure we build mines
         if base.mines < 2:
             self.build_mine(base)
-        elif base.crystal > base.cost("tank") and len(self.tanks) < 1:
+        elif len(self.tanks) < 1:
             # make sure we have at least one tank defending the base
             self.build_tank(base, seen_uids)
         elif base.mines < 3:
@@ -76,6 +97,13 @@ class Base:
             self.build_mine(base)
         elif len(self.jets) < 2:
             self.build_jet(base, seen_uids)
+        elif len(self.tanks) < 3:
+            # more tanks for defense
+            self.build_tank(base, seen_uids)
+
+        else:
+            # keep expanding the army
+            self.build_ship(base, seen_uids)
 
         return seen_uids
 
@@ -87,6 +115,9 @@ bases: dict[Base] = {}
 class PlayerAi:
     def __init__(self):
         self.team = CREATOR  # Mandatory attribute
+
+        # Record the previous positions of all my vehicles
+        self.previous_positions = {}
 
         self.uid_lookup: dict[Vehicle | Base] = {}
 
@@ -132,21 +163,40 @@ class PlayerAi:
 
         # remove the dead vehicles
         for uid in dead:
-            del vehicles[uid]
+            vehicles[uid].kill()
 
         # loop over enemies and set the targets for vehicles
         if len(info) > 1:
             for name in info:
                 if name != self.team:
                     if "bases" in info[name]:
+                        # bases are priority targets
                         for base in info[name]["bases"]:
-                            pass
+                            # find the closest vehicle to the base without a target and
+                            # set the target to the base
+                            closest_distance = 99999
+                            closest_vehicle = None
 
-                    # if the target is a base, direct the closest jet
+                            for key in vehicles.keys():
+                                vehicle = vehicles[key]
+                                distance = vehicle.distance_to(base.x, base.y)
+                                if (
+                                    distance < closest_distance
+                                    and vehicle.target is None
+                                ):
+                                    closest_distance = distance
+                                    closest_vehicle = vehicle
+                            if closest_vehicle is not None:
+                                closest_vehicle.target = [base.x, base.y]
+                                closest_vehicle.goto(base.x, base.y)
+                    if "boats" in info[name]:
+                        # boats are priority targets but only reachable by jets
+                        pass
 
                     # if the target is a near a tank, direct the tanks at it
+                    # if "jets" in info[name]:
 
-                    pass
+                    # pass
                 # Target only bases
                 # if "bases" in info[name]:
                 #     # Simply target the first base
@@ -154,3 +204,35 @@ class PlayerAi:
                 #     target = [t.x, t.y]
 
         # loop over all vehicles that have no target and resume normal operations
+
+        # Iterate through all my tanks
+        # tanks stay at the base and defend it. If it hasn't got a target, it will scan
+        if "tanks" in myinfo:
+            for tank in myinfo["tanks"]:
+                if vehicles[tank.uid].target == None:
+                    tank.set_heading((tank.heading + 45) % 360)
+
+        if "jets" in myinfo:
+            for jet in myinfo["jets"]:
+                j = vehicles[jet.uid]
+                if j.target == None:
+                    j.distance_since_last_dir = j.distance_since_last_dir + 1
+                    if j.distance_since_last_dir > j.distance_since_last_dir_longest:
+                        j.distance_since_last_dir_longest = j.distance_since_last_dir
+                        j.distance_since_last_dir = 0
+                        jet.set_heading((jet.heading + 45) % 360)
+
+        # Iterate through all my ships
+        if "ships" in myinfo:
+            for ship in myinfo["ships"]:
+                if ship.uid in self.previous_positions:
+                    # If the ship position is the same as the previous position,
+                    # convert the ship to a base if it is far from the owning base,
+                    # set a random heading otherwise
+                    if all(ship.position == self.previous_positions[ship.uid]):
+                        if ship.get_distance(ship.owner.x, ship.owner.y) > 20:
+                            ship.convert_to_base()
+                        else:
+                            ship.set_heading(np.random.random() * 360.0)
+                # Store the previous position of this ship for the next time step
+                self.previous_positions[ship.uid] = ship.position
