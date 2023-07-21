@@ -58,7 +58,7 @@ class Base:
     def build_tank(self, base, seen_uids):
         if base.crystal > base.cost("tank"):
             # build_tank() returns the uid of the tank that was built
-            tank_uid = base.build_tank(heading=0)
+            tank_uid = base.build_tank(heading=360 * np.random.random())
             self.tanks.add(tank_uid)
             vehicles[tank_uid] = Vehicle(uid=tank_uid, base_uid=base.uid, type="tank")
             seen_uids.add(tank_uid)
@@ -103,7 +103,13 @@ class Base:
 
         else:
             # keep expanding the army
-            self.build_ship(base, seen_uids)
+
+            if len(self.ships) < len(self.jets):
+                self.build_ship(base, seen_uids)
+            elif len(self.tanks) < len(self.jets):
+                self.build_tank(base, seen_uids)
+            else:
+                self.build_jet(base, seen_uids)
 
         return seen_uids
 
@@ -220,7 +226,7 @@ class PlayerAi:
                     if j.distance_since_last_dir > j.distance_since_last_dir_longest:
                         j.distance_since_last_dir_longest = j.distance_since_last_dir
                         j.distance_since_last_dir = 0
-                        jet.set_heading((jet.heading + 45) % 360)
+                        jet.set_heading((jet.heading + 30) % 360)
 
         # Iterate through all my ships
         if "ships" in myinfo:
