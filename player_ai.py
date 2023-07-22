@@ -23,6 +23,7 @@ class Vehicle:
 
     def update_current_obj(self, obj):
         self.obj = obj
+        self.target = None
 
     def distance_to(self, x, y):
         if self.obj is None:
@@ -174,6 +175,7 @@ class PlayerAi:
         if len(info) > 1:
             for name in info:
                 if name != self.team:
+                    # print(f"{name=},{self.team=}")
                     if "bases" in info[name]:
                         # bases are priority targets
                         for base in info[name]["bases"]:
@@ -205,7 +207,7 @@ class PlayerAi:
                                 vehicle = vehicles[key]
                                 if not vehicle.type == "jet":
                                     continue
-                                distance = vehicle.distance_to(base.x, base.y)
+                                distance = vehicle.distance_to(boat.x, boat.y)
                                 if (
                                     distance < closest_distance
                                     and vehicle.target is None
